@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2x2 Video Wall</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      height: 100%;
+      overflow: hidden;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      width: 100vw;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      cursor: pointer;
+    }
+    .fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid" id="grid"></div>
+  <script>
+    const streams = [
+      "https://seagirt.b-cdn.net/New_Jersey/seagirt.stream/index.m3u8",
+      "https://manasquan.b-cdn.net/sunba/manasquan/chunklist.m3u8",
+      "https://5b17d0ba29814.streamlock.net:9443/live/squan.stream/chunklist_w729886913.m3u8",
+      "https://seagirtnorth.b-cdn.net/New_Jersey/seagirt-north.stream/index.m3u8"
+    ];
+    const grid = document.getElementById("grid");
+    let fs = null;
+    streams.forEach(url => {
+      const v = document.createElement("video");
+      v.src = url;
+      v.setAttribute("playsinline", "");
+      v.setAttribute("autoplay", "");
+      v.setAttribute("muted", "");
+      v.setAttribute("controls", "");
+      v.loop = true;
+      v.addEventListener("click", () => {
+        if (fs) {
+          fs.classList.remove("fullscreen");
+          fs = null;
+        } else {
+          fs = v;
+          v.classList.add("fullscreen");
+        }
+      });
+      grid.appendChild(v);
+    });
+  </script>
+</body>
+</html>
