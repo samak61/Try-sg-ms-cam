@@ -1,0 +1,40 @@
+name: Deploy camera Workers
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: camera-workers
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: node scripts/build.mjs
+      - run: node --test scripts/worker.test.mjs
+      - name: Check deployment credentials
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo "::error::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID under Settings > Secrets and variables > Actions, then rerun this workflow."
+            exit 1
+          fi
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        camera: [sea-bright, monmouth-beach, belmar, spring-lake, sea-girt-center, sea-girt-south, manasquan, bay-head]
+    steps:
+      - uses: actions/checkout@v6
+      - run: node scripts/build.mjs
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config workers/configs/${{ matrix.camera }}/wrangler.json
