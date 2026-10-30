@@ -11,7 +11,7 @@ The grid page is published by the repository's existing GitHub Pages build. Eigh
 3. Open Actions > Deploy camera Workers > Run workflow, with branch main.
 4. Inspect all eight deployment jobs and then verify all nine videos progress at the grid URL. Successful deployment alone does not prove upstream camera playback.
 
-The shared Worker is deployed separately for each camera; the existing sea-girt-north1 Worker is never changed. Ordinary unauthenticated source requests are used; upstream access denials are preserved. No signing secrets or forged headers are used.
+The shared Worker is deployed separately for each camera; the existing sea-girt-north1 Worker is never changed. Upstream requests use the exact Referer, Origin, AppleTV User-Agent and Accept settings from the owner-provided working sea-girt-north1 source. The same settings apply to playlists, keys and media segments. Each Worker remains limited to its configured camera source. Upstream access denials are preserved; client cookies and authorization credentials are not forwarded.
 
 Update sources in cameras.json, run node scripts/build.mjs and node --test scripts/worker.test.mjs, commit generated camera-grid files, then redeploy affected Workers. Camera availability depends on upstream providers.
 

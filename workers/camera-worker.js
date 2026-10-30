@@ -1,5 +1,12 @@
 // Shared source, deployed as a separate Worker for each camera.
 const HLS_LIBRARY='https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js';
+// Match the request settings in the owner's working sea-girt-north1 Worker.
+const UPSTREAM_HEADERS={
+ 'Referer':'https://coastalcameranetwork.com/',
+ 'Origin':'https://coastalcameranetwork.com',
+ 'User-Agent':'Mozilla/5.0 (AppleTV; tvOS) AppleWebKit/605.1.15 (KHTML, like Gecko)',
+ 'Accept':'*/*'
+};
 function scope(env){const source=new URL(env.SOURCE_URL);return {source,origin:source.origin,prefix:source.pathname.slice(0,source.pathname.lastIndexOf('/')+1)};}
 function allowed(value,env){try{const u=new URL(value),s=scope(env);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&u.origin===s.origin&&u.pathname.startsWith(s.prefix);}catch{return false;}}
 function relay(value,base,env){const u=new URL(value,base).href;if(!allowed(u,env))throw Error('Playlist references an unconfigured source.');return '/stream?url='+encodeURIComponent(u);}
@@ -19,7 +26,7 @@ function play(){const g=generation;v.play().catch(e=>{if(g!==generation)return;i
 function recover(message){if(retry||blocked)return;clear();if(++attempt>5){state('error',message+' Reload this camera to try again.');return;}const delay=Math.min(60000,4000*2**(attempt-1));state('retry',message+' Retrying in '+delay/1000+' seconds.');retry=setTimeout(()=>{retry=null;start();},delay);}
 function start(){clear();blocked=false;stopped=false;userPaused=false;lastProgress=Date.now();lastTime=-1;liveSince=0;state('connecting');const g=generation;
 if(v.canPlayType('application/vnd.apple.mpegurl')&&(!window.Hls||!Hls.isSupported()||(/Safari/.test(navigator.userAgent)&&!/Chrome|Chromium|CriOS|Edg/.test(navigator.userAgent)))){v.src=source;v.onloadedmetadata=()=>{if(g===generation)play();};play();}
-else if(window.Hls&&Hls.isSupported()){hls=new Hls({capLevelToPlayerSize:true,maxBufferLength:10,maxMaxBufferLength:20,backBufferLength:0,maxBufferSize:12000000,liveSyncDurationCount:3});hls.on(Hls.Events.MANIFEST_PARSED,play);hls.on(Hls.Events.ERROR,(_e,d)=>{if(g!==generation||!d.fatal)return;if(d.response?.code===401||d.response?.code===403){blocked=true;clear();state('blocked','The source provider denied playback. No alternate credentials or request headers are used.');return;}recover('The camera connection failed'+(d.response?.code?' (HTTP '+d.response.code+')':'')+'.');});hls.loadSource(source);hls.attachMedia(v);}else state('error','This browser could not load the video player.');}
+else if(window.Hls&&Hls.isSupported()){hls=new Hls({capLevelToPlayerSize:true,maxBufferLength:10,maxMaxBufferLength:20,backBufferLength:0,maxBufferSize:12000000,liveSyncDurationCount:3});hls.on(Hls.Events.MANIFEST_PARSED,play);hls.on(Hls.Events.ERROR,(_e,d)=>{if(g!==generation||!d.fatal)return;if(d.response?.code===401||d.response?.code===403){blocked=true;clear();state('blocked','The camera provider denied playback.');return;}recover('The camera connection failed'+(d.response?.code?' (HTTP '+d.response.code+')':'')+'.');});hls.loadSource(source);hls.attachMedia(v);}else state('error','This browser could not load the video player.');}
 v.addEventListener('timeupdate',()=>{if(stopped)return;if(v.currentTime!==lastTime&&v.readyState>=2){lastTime=v.currentTime;lastProgress=Date.now();if(!liveSince)liveSince=Date.now();if(Date.now()-liveSince>30000)attempt=0;state('live');}});
 v.addEventListener('waiting',()=>{if(!stopped){liveSince=0;state('buffering');}});
 v.addEventListener('pause',()=>{if(!stopped)userPaused=true;});v.addEventListener('play',()=>{userPaused=false;lastProgress=Date.now();});
@@ -30,8 +37,8 @@ start();
 }
 async function stream(request,env){
  const source=new URL(request.url).searchParams.get('url')||env.SOURCE_URL;if(!allowed(source,env))return plain('This Worker is configured for one camera only.',403);
- const headers=new Headers();const range=request.headers.get('Range');if(range&&/^bytes=\d+-\d*$/.test(range))headers.set('Range',range);
- // Plain public request: no forged Referer/Origin, tokens, or cookies.
+ const headers=new Headers(UPSTREAM_HEADERS);const range=request.headers.get('Range');if(range&&/^bytes=\d+-\d*$/.test(range))headers.set('Range',range);
+ // Apply the same headers to playlists, keys and media segments.
  let upstream;try{upstream=await fetch(source,{headers,redirect:'manual',signal:AbortSignal.timeout(15000)});}catch{return plain('The upstream camera could not be reached.',502);}
  if(upstream.status===401||upstream.status===403){upstream.body?.cancel();return plain('The upstream camera denied access.',upstream.status);}
  if(upstream.status>=300&&upstream.status<400){const target=new URL(upstream.headers.get('Location')||'',source);upstream.body?.cancel();if(!allowed(target.href,env))return plain('The camera redirected outside its configured source.',502);return new Response(null,{status:302,headers:{Location:relay(target.href,source,env),'Cache-Control':'no-store'}});}
